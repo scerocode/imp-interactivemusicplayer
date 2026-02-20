@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>IMP Interactive Music Player v1.4</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="player">
+  <div class="indicator green" id="greenLight"></div>
+  <div class="indicator red" id="redLight"></div>
+  <div class="screen">
+    <div class="preset-indicator" id="presetIndicator">🎵</div>
+    <div class="main-view" id="mainView">
+      <div class="eyes">
+        <div class="eye" id="eyeLeft"></div>
+        <div class="eye" id="eyeRight"></div>
+      </div>
+      <div class="mouth">
+        <div class="mouth-bar"></div>
+        <div class="mouth-bar"></div>
+        <div class="mouth-bar"></div>
+        <div class="mouth-bar"></div>
+        <div class="mouth-bar"></div>
+        <div class="mouth-bar"></div>
+        <div class="mouth-bar"></div>
+        <div class="mouth-bar"></div>
+      </div>
+      <div class="audio-level">
+        <div class="audio-level-fill" id="audioLevelFill"></div>
+      </div>
+      <div class="visualizer-container">
+        <canvas id="waveCanvas"></canvas>
+      </div>
+      <div class="track-info-container">
+        <div id="trackTitle">Add music from Library</div>
+        <div id="trackInfo"></div>
+      </div>
+    </div>
+
+    <div class="volume-indicator show-on-main">
+      <div class="volume-level" id="volumeLevel"></div>
+    </div>
+
+    <div class="library-view" id="libraryView">
+      <div class="library-header">
+        <input type="text" class="library-search" id="librarySearch" placeholder="Search library...">
+        <div class="library-tabs">
+          <!-- Tabs will be rendered dynamically and can be reordered -->
+        </div>
+      </div>
+      <div class="library-content" id="libraryContent">
+        <div class="empty-library">
+          <div style="font-size:48px;opacity:0.3;margin-bottom:12px;">🎵</div>
+          <div style="font-size:12px;line-height:1.5;">
+            Your music library is empty<br>
+            Add music from Settings
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-view" id="settingsView">
+      <div class="settings-header">⚙️ Settings</div>
+      
+      <div class="setting-group">
+        <div class="setting-label">🎚️ Equalizer Presets</div>
+        <div class="setting-item">
+          <div class="setting-item-left">
+            <span class="setting-icon">🎵</span>
+            <span class="setting-text">Current Preset</span>
+          </div>
+          <span class="setting-value" id="presetName">🎵 Flat</span>
+        </div>
+        <div style="font-size:9px; color:#888; text-align:center; margin:10px 0;">
+          Swipe left/right on main screen or tap preset below
+        </div>
+        <div class="preset-buttons" id="presetButtons" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(80px,1fr)); gap:6px; margin:10px 0;"></div>
+        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+          <div style="flex:1; min-width:50px;">
+            <div style="font-size:7px; color:#aaa; text-align:center; margin-bottom:4px;">60Hz</div>
+            <div class="eq-bar-container">
+              <div class="eq-bar" id="eqBar0"></div>
+            </div>
+          </div>
+          <div style="flex:1; min-width:50px;">
+            <div style="font-size:7px; color:#aaa; text-align:center; margin-bottom:4px;">250Hz</div>
+            <div class="eq-bar-container">
+              <div class="eq-bar" id="eqBar1"></div>
+            </div>
+          </div>
+          <div style="flex:1; min-width:50px;">
+            <div style="font-size:7px; color:#aaa; text-align:center; margin-bottom:4px;">1kHz</div>
+            <div class="eq-bar-container">
+              <div class="eq-bar" id="eqBar2"></div>
+            </div>
+          </div>
+          <div style="flex:1; min-width:50px;">
+            <div style="font-size:7px; color:#aaa; text-align:center; margin-bottom:4px;">4kHz</div>
+            <div class="eq-bar-container">
+              <div class="eq-bar" id="eqBar3"></div>
+            </div>
+          </div>
+          <div style="flex:1; min-width:50px;">
+            <div style="font-size:7px; color:#aaa; text-align:center; margin-bottom:4px;">16kHz</div>
+            <div class="eq-bar-container">
+              <div class="eq-bar" id="eqBar4"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-label">📂 Library</div>
+        <div class="setting-item button-item" id="addFilesBtn">
+          <div class="setting-item-left">
+            <span class="setting-icon">📁</span>
+            <span class="setting-text">Add Files</span>
+          </div>
+        </div>
+        <div class="setting-item button-item" id="addFolderBtn">
+          <div class="setting-item-left">
+            <span class="setting-icon">📂</span>
+            <span class="setting-text">Add Folder</span>
+          </div>
+        </div>
+        <div class="setting-item button-item" id="batchMetadataBtn">
+          <div class="setting-item-left">
+            <span class="setting-icon">🔍</span>
+            <span class="setting-text">Fetch Missing Metadata</span>
+          </div>
+        </div>
+        <div class="setting-item button-item" id="clearLibraryBtn">
+          <div class="setting-item-left">
+            <span class="setting-icon">✕</span>
+            <span class="setting-text">Clear Library</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-label">♪ Playback</div>
+        <div class="setting-item" id="autoplayToggle">
+          <div class="setting-item-left">
+            <span class="setting-icon">▶</span>
+            <span class="setting-text">Autoplay on Load</span>
+          </div>
+          <div class="toggle-switch">
+            <div class="toggle-knob"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-label">🎛️ Advanced Playback</div>
+        
+        <div class="setting-item" id="gaplessToggle">
+          <div class="setting-item-left">
+            <span class="setting-icon">🔗</span>
+            <span class="setting-text">Gapless Playback</span>
+          </div>
+          <div class="toggle-switch active">
+            <div class="toggle-knob"></div>
+          </div>
+        </div>
+
+        <div class="setting-item" id="crossfadeToggle">
+          <div class="setting-item-left">
+            <span class="setting-icon">🌊</span>
+            <span class="setting-text">Crossfade Transition</span>
+          </div>
+          <div class="toggle-switch">
+            <div class="toggle-knob"></div>
+          </div>
+        </div>
+
+        <div class="setting-item" id="crossfadeDuration" style="padding-left:40px; display:none;">
+          <div class="setting-item-left">
+            <span class="setting-text">Crossfade Duration</span>
+          </div>
+          <span class="setting-value" id="crossfadeValue">3s</span>
+        </div>
+        <input type="range" id="crossfadeSlider" min="1" max="10" value="3" step="1" style="width:calc(100% - 40px); margin:0 20px 8px 40px; display:none;">
+
+        <div class="setting-item" id="normalizeToggle">
+          <div class="setting-item-left">
+            <span class="setting-icon">📊</span>
+            <span class="setting-text">Volume Normalization</span>
+          </div>
+          <div class="toggle-switch">
+            <div class="toggle-knob"></div>
+          </div>
+        </div>
+
+        <div class="setting-item" id="replayGainToggle">
+          <div class="setting-item-left">
+            <span class="setting-icon">🎚️</span>
+            <span class="setting-text">ReplayGain</span>
+          </div>
+          <div class="toggle-switch">
+            <div class="toggle-knob"></div>
+          </div>
+        </div>
+
+        <div class="setting-item" id="playbackSpeed">
+          <div class="setting-item-left">
+            <span class="setting-icon">⏩</span>
+            <span class="setting-text">Playback Speed</span>
+          </div>
+          <span class="setting-value" id="speedValue">1.0x</span>
+        </div>
+        <input type="range" id="speedSlider" min="50" max="200" value="100" step="5" style="width:calc(100% - 20px); margin:0 10px 8px 10px;">
+
+        <div class="setting-item" id="fadeEffectsToggle">
+          <div class="setting-item-left">
+            <span class="setting-icon">🎵</span>
+            <span class="setting-text">Fade In/Out Effects</span>
+          </div>
+          <div class="toggle-switch">
+            <div class="toggle-knob"></div>
+          </div>
+        </div>
+
+        <div class="setting-item" id="fadeDuration" style="padding-left:40px; display:none;">
+          <div class="setting-item-left">
+            <span class="setting-text">Fade Duration</span>
+          </div>
+          <span class="setting-value" id="fadeValue">2s</span>
+        </div>
+        <input type="range" id="fadeSlider" min="1" max="5" value="2" step="0.5" style="width:calc(100% - 40px); margin:0 20px 8px 40px; display:none;">
+
+        <div class="setting-item" id="loudnessToggle">
+          <div class="setting-item-left">
+            <span class="setting-icon">🔊</span>
+            <span class="setting-text">Loudness Leveling</span>
+          </div>
+          <div class="toggle-switch">
+            <div class="toggle-knob"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-label">✦ Display</div>
+        <div class="setting-item" id="animationsToggle">
+          <div class="setting-item-left">
+            <span class="setting-icon">✨</span>
+            <span class="setting-text">Animations</span>
+          </div>
+          <div class="toggle-switch active">
+            <div class="toggle-knob"></div>
+          </div>
+        </div>
+        <div class="setting-item" id="screenShakeToggle">
+          <div class="setting-item-left">
+            <span class="setting-icon">📳</span>
+            <span class="setting-text">Screen Shake</span>
+          </div>
+          <div class="toggle-switch active">
+            <div class="toggle-knob"></div>
+          </div>
+        </div>
+        <div class="setting-item" id="visualizerToggle">
+          <div class="setting-item-left">
+            <span class="setting-icon">▬</span>
+            <span class="setting-text">Audio Visualizer</span>
+          </div>
+          <div class="toggle-switch active">
+            <div class="toggle-knob"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-label">ⓘ Info</div>
+        <div class="setting-item">
+          <div class="setting-item-left">
+            <span class="setting-icon">📱</span>
+            <span class="setting-text">Version</span>
+          </div>
+          <span class="setting-value">v1.4</span>
+        </div>
+        <div class="setting-item">
+          <div class="setting-item-left">
+            <span class="setting-icon">♪</span>
+            <span class="setting-text">Tracks in Library</span>
+          </div>
+          <span class="setting-value" id="trackCount">0</span>
+        </div>
+        <div class="setting-item" id="batteryItem">
+          <div class="setting-item-left">
+            <span class="setting-icon" id="batteryIcon">🔋</span>
+            <span class="setting-text">Device Battery</span>
+          </div>
+          <span class="setting-value" id="batteryDisplay">--</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen-footer">
+      <div class="screen-tabs">
+        <div class="screen-tab active" data-view="main">PLAYING</div>
+        <div class="screen-tab" data-view="library">LIBRARY</div>
+        <div class="screen-tab" data-view="settings">SETTINGS</div>
+      </div>
+      <div class="screen-controls">
+        <span class="control-icon" id="favoriteIcon" title="Favorite">♡</span>
+        <span class="control-icon" id="shuffleIcon" title="Shuffle">⇄</span>
+        <span class="control-icon" id="repeatIcon" title="Repeat">↻</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="wheel-container">
+    <div class="wheel">
+      <div class="wheel-button top" id="volUpBtn"></div>
+      <div class="wheel-button bottom" id="volDownBtn"></div>
+      <div class="wheel-button left" id="prevBtn"></div>
+      <div class="wheel-button right" id="nextBtn"></div>
+      <svg class="progress-ring" id="progressRing">
+        <circle class="progress-ring-bg" cx="50%" cy="50%" r="48%" />
+        <circle class="progress-ring-fill" id="progressRingFill" cx="50%" cy="50%" r="48%" />
+      </svg>
+      <div class="center-button" id="centerBtn">
+        <img class="album-artwork" id="albumArtwork" alt="">
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="fileInput" accept="audio/*" multiple>
+  <input type="file" id="folderInput" webkitdirectory directory multiple>
+  <audio id="audio" preload="metadata"></audio>
+  
+  <!-- Metadata Editor Modal -->
+  <div class="metadata-modal" id="metadataModal">
+    <div class="metadata-modal-content">
+      <div class="metadata-modal-header">
+        <span>Edit Metadata</span>
+        <span class="metadata-modal-close" onclick="closeMetadataEditor()">✕</span>
+      </div>
+      <div class="metadata-modal-body">
+        <div class="metadata-field">
+          <label>Title</label>
+          <input type="text" id="metaTitle" placeholder="Song title">
+        </div>
+        <div class="metadata-field">
+          <label>Artist</label>
+          <input type="text" id="metaArtist" placeholder="Artist name">
+        </div>
+        <div class="metadata-field">
+          <label>Album</label>
+          <input type="text" id="metaAlbum" placeholder="Album name">
+        </div>
+        <div class="metadata-field">
+          <label>Genre</label>
+          <input type="text" id="metaGenre" placeholder="Genre">
+        </div>
+        <div class="metadata-field">
+          <label>Year</label>
+          <input type="text" id="metaYear" placeholder="Year">
+        </div>
+        <div class="metadata-buttons">
+          <button class="metadata-btn web-search-btn" id="webSearchBtn" onclick="searchMetadataOnline()">
+            🔍 Search Web for Metadata
+          </button>
+        </div>
+        <div class="metadata-web-results" id="searchResults"></div>
+      </div>
+      <div class="metadata-modal-footer">
+        <button class="metadata-btn cancel-btn" onclick="closeMetadataEditor()">Cancel</button>
+        <button class="metadata-btn save-btn" onclick="saveMetadata()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
