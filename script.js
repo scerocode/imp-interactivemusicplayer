@@ -2303,6 +2303,6 @@ renderLibrary();
 updateTrackCount();
 updateFavoriteButton();
 createPresetButtons();
-updateEQBars();
+applyEQPreset(currentPreset);
 initBattery();
 drawWave();
