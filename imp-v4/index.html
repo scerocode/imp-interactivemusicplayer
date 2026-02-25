@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>IMP Interactive Music Player v1.4</title>
+<title>IMP Interactive Music Player v4 — Phoneme Lip Sync</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+<script src="lipsync.js"></script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -17,25 +18,25 @@
   <div class="screen">
     <div class="preset-indicator" id="presetIndicator">🎵</div>
     <div class="main-view" id="mainView">
-      <div class="eyes">
-        <div class="eye" id="eyeLeft"></div>
-        <div class="eye" id="eyeRight"></div>
-      </div>
-      <div class="mouth">
-        <div class="mouth-bar"></div>
-        <div class="mouth-bar"></div>
-        <div class="mouth-bar"></div>
-        <div class="mouth-bar"></div>
-        <div class="mouth-bar"></div>
-        <div class="mouth-bar"></div>
-        <div class="mouth-bar"></div>
-        <div class="mouth-bar"></div>
+      <div class="face" id="faceContainer">
+        <canvas id="waveCanvas"></canvas>
+        <div class="eyes">
+          <div class="eye" id="eyeLeft"></div>
+          <div class="eye" id="eyeRight"></div>
+        </div>
+        <div class="mouth">
+          <div class="mouth-bar"></div>
+          <div class="mouth-bar"></div>
+          <div class="mouth-bar"></div>
+          <div class="mouth-bar"></div>
+          <div class="mouth-bar"></div>
+          <div class="mouth-bar"></div>
+          <div class="mouth-bar"></div>
+          <div class="mouth-bar"></div>
+        </div>
       </div>
       <div class="audio-level">
         <div class="audio-level-fill" id="audioLevelFill"></div>
-      </div>
-      <div class="visualizer-container">
-        <canvas id="waveCanvas"></canvas>
       </div>
       <div class="track-info-container">
         <div id="trackTitle">Add music from Library</div>
@@ -273,6 +274,29 @@
           <div class="toggle-switch active">
             <div class="toggle-knob"></div>
           </div>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-label">🤖 Lip Sync</div>
+        <div class="setting-item" style="cursor:default;pointer-events:none;opacity:0.85">
+          <div class="setting-item-left">
+            <span class="setting-icon">📊</span>
+            <span class="setting-text">Phoneme</span>
+          </div>
+          <span class="setting-value" id="activePhonemeDisplay">—</span>
+        </div>
+        <div class="setting-item" style="cursor:default;pointer-events:none;opacity:0.85">
+          <div class="setting-item-left">
+            <span class="setting-icon">👄</span>
+            <span class="setting-text">Viseme</span>
+          </div>
+          <span class="setting-value" id="activeVisemeDisplay">—</span>
+        </div>
+        <div style="font-size:8px;color:#aaa;padding:6px 8px;line-height:1.6">
+          🎵 Real-time spectral analysis<br>
+          Works automatically on any song.<br>
+          F1/F2 formants → vowel shapes.
         </div>
       </div>
 

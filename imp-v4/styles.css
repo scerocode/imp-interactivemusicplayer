@@ -139,7 +139,6 @@ input[type="range"]::-moz-range-thumb:active { background: #4a9fd8; }
   pointer-events: none;
 }
 .preset-indicator.visible { opacity: 1; animation: presetPulse 0.5s ease; }
-
 @keyframes presetPulse {
   0%, 100% { transform: scale(1);   }
   50%       { transform: scale(1.2); }
@@ -205,25 +204,47 @@ input[type="range"]::-moz-range-thumb:active { background: #4a9fd8; }
   padding: 15px;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── FACE CONTAINER ─────────────────────────────────────────────────────────
+   Single unified container for eyes, mouth, and canvas hands.
+   Everything scales together as one unit.
+   ──────────────────────────────────────────────────────────────────────── */
+.face {
+  position: relative;
+  width: min(85%, 280px);
+  aspect-ratio: 3 / 2;
+  flex-shrink: 0;
+}
+
+/* Canvas fills the entire face — hands draw across the full area */
+.face canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
 }
 
 /* Eyes */
 .eyes {
   position: absolute;
-  top: clamp(18px, 3.5vh, 24px);
+  top: 18%;
   left: 50%;
   width: 100%;
   display: flex;
   justify-content: center;
   transform: translateX(-50%);
   pointer-events: none;
-  gap: clamp(12px, 3vw, 18px);
+  gap: 8%;
   z-index: 5;
 }
 
 .eye {
-  width: clamp(60px, 15vw, 75px);
-  height: clamp(35px, 8vw, 45px);
+  width: 28%;
+  aspect-ratio: 5 / 3;
   background: linear-gradient(to top, #6bb3e0, #4a9fd8);
   border-radius: 50% 50% 50% 50%/100% 100% 0% 0%;
   box-shadow: 0 0 30px rgba(107,179,224,0.8), 0 0 50px rgba(107,179,224,0.4);
@@ -239,10 +260,10 @@ input[type="range"]::-moz-range-thumb:active { background: #4a9fd8; }
 .eye::after {
   content: '';
   position: absolute;
-  top: clamp(6px, 1.5vw, 10px);
-  left: clamp(12px, 3vw, 18px);
-  width: clamp(16px, 4vw, 22px);
-  height: clamp(8px, 2vw, 12px);
+  top: 20%;
+  left: 22%;
+  width: 35%;
+  height: 35%;
   background: rgba(255,255,255,0.5);
   border-radius: 50%;
   filter: blur(4px);
@@ -259,25 +280,26 @@ input[type="range"]::-moz-range-thumb:active { background: #4a9fd8; }
 /* Mouth */
 .mouth {
   position: absolute;
-  top: clamp(68px, 12vh, 85px);
+  top: 60%;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: clamp(2px, 0.5vw, 4px);
-  align-items: center;
-  height: clamp(50px, 10vh, 65px);
-  width: clamp(80px, 20vw, 95px);
+  gap: 2%;
+  align-items: flex-end;
+  height: 32%;
+  width: 40%;
   pointer-events: none;
   justify-content: center;
   z-index: 5;
+  overflow: hidden;
 }
 
 .mouth-bar {
-  width: clamp(5px, 1.2vw, 7px);
+  width: 9%;
   background: linear-gradient(180deg, #6bb3e0, #4a9fd8);
   border-radius: clamp(2px, 0.5vw, 4px);
   box-shadow: 0 0 8px rgba(107,179,224,0.6), inset 0 1px 3px rgba(255,255,255,0.3);
-  transition: height 0.08s ease-out, transform 0.08s ease-out;
+  transition: height 0.05s ease-out, transform 0.05s ease-out, background 0.2s, box-shadow 0.1s;
 }
 
 /* Phoneme patterns */
@@ -380,20 +402,7 @@ input[type="range"]::-moz-range-thumb:active { background: #4a9fd8; }
   opacity: 0.7;
 }
 
-.visualizer-container {
-  flex: 1;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: clamp(90px, 18vh, 110px);
-}
-
-canvas {
-  width: 100%;
-  height: clamp(70px, 12vh, 90px);
-  display: block;
-}
+/* visualizer-container removed — canvas now lives inside .face */
 
 /* Seek / progress bar */
 .volume-indicator {
@@ -1028,3 +1037,30 @@ canvas {
 
 .search-loading, .search-empty { text-align: center; padding: 15px; font-size: 11px; color: #aaa; }
 .search-error                  { text-align: center; padding: 15px; font-size: 11px; color: #ff6b6b; }
+
+/* ============================================================================
+   LIP SYNC v2 — Expressive Singing Mouth Styles
+   ============================================================================ */
+
+/* Active lip sync state — override static phoneme classes */
+.mouth.lipsync-active .mouth-bar {
+  transition: height 0.04s ease-out, box-shadow 0.06s ease, background 0.08s ease;
+  will-change: height, box-shadow;
+}
+
+/* Viseme-specific glow colors for extra expressiveness */
+.mouth.viseme-open_aa  .mouth-bar,
+.mouth.viseme-sing_big .mouth-bar { filter: brightness(1.15); }
+
+.mouth.viseme-open_ee  .mouth-bar,
+.mouth.viseme-open_ih  .mouth-bar { filter: brightness(1.05) saturate(1.1); }
+
+.mouth.viseme-open_oo  .mouth-bar,
+.mouth.viseme-open_uw  .mouth-bar { filter: brightness(1.08) hue-rotate(-10deg); }
+
+.mouth.viseme-sibilant .mouth-bar { filter: brightness(0.9) saturate(1.2); }
+.mouth.viseme-closed   .mouth-bar { filter: brightness(0.6); }
+.mouth.viseme-rest     .mouth-bar { filter: none; }  /* color handled in JS */
+
+
+/* Lip sync indicator pulse */

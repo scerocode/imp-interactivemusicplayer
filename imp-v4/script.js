@@ -94,6 +94,7 @@ let eyeOffsetY         = 0;
 let mouthEnergy        = 0;
 let currentPhoneme     = 'mm';
 let lastPhonemeChange  = 0;
+let lipSyncBenchmarkActive = false;
 let lastEmotionChange  = 0;
 let emotionLockDuration = 2000;
 let idleState          = 'active';
@@ -689,6 +690,7 @@ function showQueueNotification(message) {
   setTimeout(() => n.classList.remove('show'), 3000);
 }
 
+
 // ============================================================================
 // DUPLICATE DIALOGS
 // ============================================================================
@@ -997,23 +999,34 @@ function updateBatteryIndicators() {
 function initAudioContext() {
   if (audioCtx) return;
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  // Main analyser for waveform/visualizer (low-res is fine)
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 128;
+  analyser.smoothingTimeConstant = 0.8;
 
-  eq60  = createFilter('lowshelf',  60);
-  eq250 = createFilter('peaking',   250,  1);
-  eq1k  = createFilter('peaking',   1000, 1);
-  eq4k  = createFilter('peaking',   4000, 1);
-  eq16k = createFilter('highshelf', 16000);
+  // High-res analyser for lip sync formant analysis (2048 bins = ~21Hz resolution)
+  const lipAnalyser = audioCtx.createAnalyser();
+  lipAnalyser.fftSize = 2048;
+  lipAnalyser.smoothingTimeConstant = 0.5;
+
+  eq60  = createFilter("lowshelf",  60);
+  eq250 = createFilter("peaking",   250,  1);
+  eq1k  = createFilter("peaking",   1000, 1);
+  eq4k  = createFilter("peaking",   4000, 1);
+  eq16k = createFilter("highshelf", 16000);
   gainNode = audioCtx.createGain();
 
   source = audioCtx.createMediaElementSource(audio);
   source.connect(eq60);
   eq60.connect(eq250); eq250.connect(eq1k);
   eq1k.connect(eq4k);  eq4k.connect(eq16k);
-  eq16k.connect(gainNode); gainNode.connect(analyser);
+  eq16k.connect(gainNode);
+  gainNode.connect(analyser);
+  gainNode.connect(lipAnalyser);  // tap for lip sync
   analyser.connect(audioCtx.destination);
 
+  LipSyncEngine.init(lipAnalyser, audioCtx.sampleRate);
   applyEQPreset(currentPreset);
 }
 
@@ -1152,6 +1165,10 @@ function loadTrack(idx) {
   audio.playbackRate  = playbackSpeed;
   trackTitle.textContent = title;
   trackInfo.textContent  = `${artist} • ${album} • ${idx + 1} of ${playlist.length}`;
+
+  // LipSyncEngine: detect Hello World benchmark, reset on other tracks
+  LipSyncEngine.reset();
+  checkBenchmarkMode(title);
 
   updateProgressRing(0);
   volumeLevel.style.width = '0%';
@@ -1362,15 +1379,52 @@ function resetIdle() {
 }
 
 function updateIdleState() {
-  if (isPlaying) { idleState = 'active'; deepSleepTimer = 0; return; }
+  if (isPlaying) { idleState = 'active'; deepSleepTimer = 0; screen.style.opacity = '1'; return; }
   const s = (Date.now() - lastInteractionTime) / 1000;
-  if      (s < 10) idleState = 'active';
-  else if (s < 30) idleState = 'curious';
-  else if (s < 60) idleState = 'bored';
+  if      (s < 20)  idleState = 'active';
+  else if (s < 60)  idleState = 'curious';
+  else if (s < 120) idleState = 'bored';
   else { idleState = 'sleepy'; deepSleepTimer++; }
 }
 
 function lerp(a, b, t) { return a + (b - a) * t; }
+
+// ============================================================================
+// LIP SYNC — AMPLITUDE FALLBACK
+// Used for non-benchmark songs when no phoneme timeline is loaded.
+// Still produces plausible viseme output from audio analysis.
+// ============================================================================
+
+function _amplitudeFallbackLip(avg, data, now) {
+  const bass   = data[2] / 255;
+  const mid    = data[Math.floor(data.length / 2)] / 255;
+  const treble = data[data.length - 3] / 255;
+  const energy = avg / 255;
+
+  let phoneme = 'SIL';
+  if      (bass > 0.6 && energy > 0.5)   phoneme = 'AA';
+  else if (treble > 0.5 && mid < 0.3)     phoneme = Math.random() > 0.5 ? 'IY' : 'S';
+  else if (energy > 0.6)                   phoneme = Math.random() > 0.5 ? 'OW' : 'ER';
+  else if (energy > 0.3)                   phoneme = ['D','N','L'][Math.floor(Math.random()*3)];
+  else                                      phoneme = 'SIL';
+
+  const viseme = LipSyncEngine.VisemeMapper.map(phoneme);
+
+  // Simple interpolation via a reused interpolator-like approach
+  const baseHeights = LipSyncEngine.VISEME_SHAPES[viseme] || LipSyncEngine.VISEME_SHAPES.REST;
+  const scaledHeights = baseHeights.map(h => h * (0.5 + energy * 0.8));
+
+  return { viseme, heights: scaledHeights, phoneme, isRest: energy < 0.1 };
+}
+
+// ============================================================================
+// BENCHMARK DETECTION — auto-activates Hello World lip sync
+// ============================================================================
+
+function checkBenchmarkMode(trackTitle) {
+  // v2: LipSyncEngine runs real-time analysis on ALL tracks automatically.
+  // Show the indicator whenever playing.
+}
 
 function setViewportHeight() {
   document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
@@ -1435,12 +1489,16 @@ function setDisplayPair(id1, id2, show) {
 function setEmotion(emotion) {
   const e = EMOTIONS[emotion];
   if (!e) return;
-  eyeLeft.style.width        = e.width  + 'px';
-  eyeLeft.style.height       = e.height + 'px';
+  // Convert legacy px values → % so eyes scale with the face container.
+  // Base reference: 75px wide, 45px tall eye = 100% / 100%
+  const w = (e.width  / 75  * 100).toFixed(1) + '%';
+  const h = (e.height / 45 * 100).toFixed(1) + '%';
+  eyeLeft.style.width        = w;
+  eyeLeft.style.height       = h;
   eyeLeft.style.borderRadius = e.radiusLeft;
   eyeLeft.style.opacity      = e.opacity;
-  eyeRight.style.width        = e.width  + 'px';
-  eyeRight.style.height       = e.height + 'px';
+  eyeRight.style.width        = w;
+  eyeRight.style.height       = h;
   eyeRight.style.borderRadius = e.radiusRight;
   eyeRight.style.opacity      = e.opacity;
 }
@@ -1558,6 +1616,10 @@ function drawWave() {
         eyeLeft.style.transform = eyeRight.style.transform = `translateY(${eyeOffsetY}px)`;
         screen.style.opacity = deepSleepTimer > 60 ? '0.7' : '1';
         break;
+      default:
+        // Always restore screen opacity when awake
+        screen.style.opacity = '1';
+        break;
     }
   }
 
@@ -1573,46 +1635,62 @@ function drawWave() {
   }
 
   if (visualizerEnabled) {
-    if (isPlaying && avg > 30) {
-      mouthEnergy = lerp(mouthEnergy, avg / 255, 0.2);
-      const bass   = dataArray[2] / 255;
-      const mid    = dataArray[Math.floor(dataArray.length / 2)] / 255;
-      const treble = dataArray[dataArray.length - 3] / 255;
+    // ── PHONEME LIP SYNC ─────────────────────────────────────────────────────
+    LipSyncEngine.setEmotion(currentEmotion);
+    let lip;
+    try { lip = LipSyncEngine.tick(isPlaying && avg > 20); }
+    catch(e) { lip = { viseme:'REST', heights:new Array(8).fill(3), openness:0, isRest:true, phoneme:'SIL' }; }
 
-      if (now - lastPhonemeChange > (PHONEME_DURATIONS[currentPhoneme] || 120)) {
-        const r = Math.random();
-        if      (bass > 0.6 && mouthEnergy > 0.5)  currentPhoneme = 'aa';
-        else if (treble > 0.5 && mid < 0.3)         currentPhoneme = r > 0.5 ? 'ee' : 'ss';
-        else if (mouthEnergy > 0.6)                  currentPhoneme = r > 0.5 ? 'oh' : 'rr';
-        else if (mouthEnergy > 0.3)                  currentPhoneme = ['dd', 'ff', 'ss'][Math.floor(r * 3)];
-        else                                          currentPhoneme = 'mm';
-        lastPhonemeChange = now;
+    if (mouthBars.length === 8) {
+      const { viseme, heights, openness, isRest, phoneme } = lip;
+      currentPhoneme = phoneme || 'SIL';
+
+      // Glow intensity scales with mouth openness (looks energetic when singing)
+      const mouthGlow = isRest ? 0.15 : 0.4 + openness * 1.2;
+      const glowColor = preset.color;
+
+      // Reduce blinking when mouth is open (looks focused on singing)
+      if (!isRest && openness > 0.3) blinkTimer = Math.min(blinkTimer, 60);
+
+      // Update mouth container class for CSS fallback
+      if (mouthContainer) {
+        mouthContainer.className = `mouth lipsync-active viseme-${viseme.toLowerCase()}`;
       }
 
-      if (mouthContainer) mouthContainer.className = 'mouth phoneme-' + currentPhoneme;
-      const es = 0.8 + mouthEnergy * 0.6;
-      mouthBars.forEach(bar => {
-        bar.style.transform  = `scaleY(${es})`;
-        bar.style.opacity    = '1';
-        bar.style.background = `linear-gradient(180deg,${preset.color},${preset.color}dd)`;
-        bar.style.boxShadow  = `0 0 8px ${preset.color}99,inset 0 1px 3px rgba(255,255,255,0.3)`;
+      mouthBars.forEach((bar, i) => {
+        // Heights as % of mouth container so they scale with the face
+        const hPct = Math.max(5, Math.min(92, heights[i] / 54 * 90));
+        bar.style.height = hPct + '%';
+        bar.style.transform = 'scaleY(1)';
+
+        if (isRest) {
+          const smilePct = [8, 12, 16, 20, 20, 16, 12, 8];
+          bar.style.height     = smilePct[i] + '%';
+          bar.style.opacity    = '0.75';
+          bar.style.background = `linear-gradient(180deg, ${glowColor}, ${glowColor}cc)`;
+          bar.style.boxShadow  = `0 0 6px ${glowColor}55, inset 0 1px 2px rgba(255,255,255,0.2)`;
+        } else {
+          const isVowel    = viseme.startsWith('OPEN_') || viseme.includes('SING');
+          const topColor   = isVowel ? glowColor : glowColor + 'cc';
+          const glowAmount = 6 + openness * 18;
+          bar.style.opacity    = '1';
+          bar.style.background = `linear-gradient(180deg, ${topColor}, ${glowColor}bb)`;
+          bar.style.boxShadow  = `0 0 ${glowAmount}px ${glowColor}${Math.floor(mouthGlow * 255).toString(16).padStart(2,'0')}, inset 0 1px 3px rgba(255,255,255,0.25)`;
+        }
       });
-    } else {
-      mouthEnergy = lerp(mouthEnergy, 0, 0.1);
-      switch (idleState) {
-        case 'active':  case 'curious': setMouthExpression('smile', 0.7); break;
-        case 'bored':                   setMouthExpression('flat');        break;
-        case 'sleepy':                  setMouthExpression('sleepy');      break;
-      }
+
+      // Eye glow syncs with singing energy
+      const eyeGlow = isRest ? 15 : 15 + openness * 25;
+      eyeLeft.style.boxShadow = eyeRight.style.boxShadow =
+        `0 0 ${animationsEnabled ? eyeGlow : 15}px ${preset.color}aa`;
     }
   } else {
     setMouthExpression('smile', 0.5);
   }
-
   if (!visualizerEnabled || (!isPlaying && idleState === 'sleepy')) return;
 
-  // Hand drawing
-  const cy       = canvas.height / 2;
+  // Hand drawing — positioned at 75% down the face container
+  const cy       = canvas.height * 0.75;
   const leftAvg  = dataArray.slice(0, 32).reduce((a, b) => a + b, 0) / 32;
   const rightAvg = dataArray.slice(32).reduce((a, b) => a + b, 0) / 32;
   const danceOffset = (isPlaying && animationsEnabled) ? Math.sin(danceTimer) * 15 : 0;
@@ -2012,7 +2090,7 @@ audio.addEventListener('timeupdate', () => {
 const volumeIndicator = document.querySelector('.volume-indicator');
 if (volumeIndicator) {
   const getSeekPct = x => Math.max(0, Math.min(1, (x - volumeIndicator.getBoundingClientRect().left) / volumeIndicator.offsetWidth));
-  const seek = pct => { audio.currentTime = pct * audio.duration; volumeLevel.style.width = pct * 100 + '%'; };
+  const seek = pct => { audio.currentTime = pct * audio.duration; volumeLevel.style.width = pct * 100 + '%'; LipSyncEngine.reset(); };
 
   volumeIndicator.addEventListener('click', e => { if (audio.duration) seek(getSeekPct(e.clientX)); });
   volumeIndicator.addEventListener('touchstart', e => { e.preventDefault(); if (audio.duration) seek(getSeekPct(e.touches[0].clientX)); });
@@ -2143,6 +2221,20 @@ setupToggle('screenShakeToggle', v => {
   }
 });
 setupToggle('visualizerToggle', v => { visualizerEnabled = v; });
+
+// LipSync v2: auto-mode, no manual toggle needed
+
+// Update phoneme/viseme debug display in settings
+setInterval(() => {
+  const phEl = document.getElementById('activePhonemeDisplay');
+  const viEl = document.getElementById('activeVisemeDisplay');
+  if (phEl) phEl.textContent = currentPhoneme || '—';
+  if (viEl && LipSyncEngine.isActive()) {
+    viEl.textContent = LipSyncEngine.VisemeMapper.map(currentPhoneme) || '—';
+  } else if (viEl) {
+    viEl.textContent = '—';
+  }
+}, 100);
 
 setupToggle('gaplessToggle', v => {
   gaplessEnabled = v;
